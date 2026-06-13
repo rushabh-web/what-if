@@ -6,9 +6,12 @@ back to the seed provider so the app keeps working.
 """
 from __future__ import annotations
 
+from datetime import datetime
+
 import httpx
 
 from app.providers.base import DataProvider
+from app.seed.data import TOURNAMENT_START
 from app.seed.data import TEAMS as SEED_TEAMS
 
 BASE_URL = "https://api.football-data.org/v4"
@@ -16,6 +19,20 @@ COMPETITION = "WC"
 
 # Reuse seed ratings (by FIFA code) so the Poisson model has sensible strengths.
 _SEED_RATING = {t["fifa_code"]: t["rating"] for t in SEED_TEAMS}
+
+
+def _parse_date(raw: str | None) -> datetime:
+    """Parse an ISO-8601 UTC string (e.g. '2026-06-11T19:00:00Z') to a naive datetime.
+
+    SQLAlchemy/psycopg needs a real datetime for the Postgres timestamp column;
+    a raw string only works on SQLite. Falls back to the tournament start date.
+    """
+    if not raw:
+        return TOURNAMENT_START
+    try:
+        return datetime.fromisoformat(raw.replace("Z", "+00:00")).replace(tzinfo=None)
+    except ValueError:
+        return TOURNAMENT_START
 
 
 class FootballDataProvider(DataProvider):
@@ -68,7 +85,7 @@ class FootballDataProvider(DataProvider):
                     "away_team_id": (m.get("awayTeam") or {}).get("id"),
                     "group_name": group,
                     "matchday": m.get("matchday") or 1,
-                    "match_date": m.get("utcDate"),
+                    "match_date": _parse_date(m.get("utcDate")),
                     "status": "finished" if finished else "scheduled",
                     "home_goals": score.get("home"),
                     "away_goals": score.get("away"),
