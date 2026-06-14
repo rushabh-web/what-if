@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from functools import lru_cache
 
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -32,6 +33,23 @@ class Settings(BaseSettings):
 
     # CORS
     cors_origins: str = "http://localhost:3000"
+
+    @field_validator(
+        "database_url",
+        "data_provider",
+        "football_data_api_key",
+        "anthropic_api_key",
+        "anthropic_model",
+        "gemini_api_key",
+        "gemini_model",
+        "cors_origins",
+        mode="after",
+    )
+    @classmethod
+    def _strip(cls, v: str) -> str:
+        # Env values (esp. secrets pasted into hosting dashboards) often pick up a
+        # trailing newline/space, which is an illegal HTTP header value. Strip it.
+        return v.strip() if isinstance(v, str) else v
 
     @property
     def cors_origin_list(self) -> list[str]:
