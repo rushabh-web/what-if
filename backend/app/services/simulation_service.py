@@ -10,7 +10,7 @@ from app.config import get_settings
 from app.engine.knockout import project_path
 from app.engine.simulator import apply_scenario, unknown_match_ids
 from app.engine.standings import compute_all_tables
-from app.nlp import parse_query
+from app.nlp import smart_parse
 from app.repositories import SimulationRepository
 from app.schemas.match import ScenarioMatch
 from app.schemas.probability import TeamProbabilities
@@ -47,7 +47,7 @@ def run_simulation(db: Session, request: SimulateRequest) -> SimulateResponse:
     focus_id = request.focus_team_id
     parsed_desc: str | None = None
     if request.query:
-        parsed = parse_query(request.query, teams, matches)
+        parsed = smart_parse(request.query, teams, matches)
         parsed_desc = parsed.description
         if focus_id is None:
             focus_id = parsed.focus_team_id
