@@ -50,12 +50,49 @@ def _build_prompt(ctx: ExplanationContext) -> str:
 
 def generate_explanation(ctx: ExplanationContext) -> str:
     settings = get_settings()
-    if settings.anthropic_api_key:
+    if settings.gemini_api_key:
+        try:
+            return _gemini_explanation(ctx, settings.gemini_api_key, settings.gemini_model)
+        except Exception as exc:  # noqa: BLE001 - never fail the request over the narrative
+            logger.warning("Gemini explanation failed (%s); using template", exc)
+    elif settings.anthropic_api_key:
         try:
             return _anthropic_explanation(ctx, settings.anthropic_api_key, settings.anthropic_model)
         except Exception as exc:  # noqa: BLE001 - never fail the request over the narrative
             logger.warning("Anthropic explanation failed (%s); using template", exc)
     return build_template_explanation(asdict(ctx))
+
+
+def _gemini_explanation(ctx: ExplanationContext, api_key: str, model: str) -> str:
+    import httpx
+
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+    payload = {
+        "systemInstruction": {"parts": [{"text": _SYSTEM}]},
+        "contents": [{"parts": [{"text": _build_prompt(ctx)}]}],
+        "generationConfig": {
+            "maxOutputTokens": 500,
+            "temperature": 0.7,
+            # gemini-2.5 "thinks" by default and would eat the output budget; disable it.
+            "thinkingConfig": {"thinkingBudget": 0},
+        },
+    }
+    with httpx.Client(timeout=20.0) as client:
+        resp = client.post(
+            url,
+            headers={"x-goog-api-key": api_key, "Content-Type": "application/json"},
+            json=payload,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+    candidates = data.get("candidates") or []
+    if not candidates:
+        raise RuntimeError(f"Gemini returned no candidates: {data}")
+    parts = candidates[0].get("content", {}).get("parts", [])
+    text = "".join(p.get("text", "") for p in parts).strip()
+    if not text:
+        raise RuntimeError("Gemini returned empty text")
+    return text
 
 
 def _anthropic_explanation(ctx: ExplanationContext, api_key: str, model: str) -> str:

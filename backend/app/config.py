@@ -20,9 +20,12 @@ class Settings(BaseSettings):
     data_provider: str = "seed"
     football_data_api_key: str = ""
 
-    # AI explanation layer
+    # AI explanation layer. Provider auto-selected by which key is present:
+    # Gemini (if gemini_api_key) -> Anthropic (if anthropic_api_key) -> template.
     anthropic_api_key: str = ""
     anthropic_model: str = "claude-haiku-4-5-20251001"
+    gemini_api_key: str = ""
+    gemini_model: str = "gemini-2.5-flash"
 
     # Monte Carlo
     monte_carlo_runs: int = 20000
